@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DICRYPTING - Underground Resistance Web Game</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel Standalone CDN -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Custom Tailwind Config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          animation: {
+            'fade-in': 'fadeIn 0.5s ease-out forwards',
+            'terminal-boot': 'terminalBoot 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'translateY(10px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            terminalBoot: {
+              '0%': { opacity: '0', transform: 'scale(0.97) translateY(12px)', filter: 'blur(4px)' },
+              '100%': { opacity: '1', transform: 'scale(1) translateY(0)', filter: 'blur(0)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Webkit Scrollbars Customization */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #10b981;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #34d399;
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-green-500 font-mono overflow-x-hidden selection:bg-green-500 selection:text-black">
+  <div id="root"></div>
+
+  <!-- React TSX script tag compiled by Babel on-the-fly -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ==========================================\
+    // 1. 雙語資料庫 (Localization Dictionary)
+    // ==========================================\
+    const LOCALE = {
+      zh: {
+        intro: {
+          story: "解碼者，歡迎加入地下反抗軍。在這個城市，語言已被當局嚴格管控，自由的單字是我們唯一的武器。你必須在追蹤程式鎖定我們之前，攔截並重組被封鎖的詞彙。",
+          loading: "下載任務規則中...",
+          tasks: {
+            task1: "任務一：字母解碼 - 攔截手牌封包，上下字母擇一使用，拼出真實存在的單字。每個字母得 1 分。",
+            task2: "任務二：故障碼掃除 - 單字上的「小蟲總數」若完美符合特定的故障碼數量，得 2 分。",
+            task3: "任務三：最高指令 - 達成總部指派的「單字任務卡」條件，額外獲得 3 分。拼出單字後，若確認符合，請點擊畫面上的 [ REQUEST VALIDATED ] 勾選框，系統才會認證此貢獻。",
+            warning: "警告：追蹤計時器 - 音樂響起即開始追蹤，必須在倒數歸零前完成！"
+          },
+          startBtn: "進入系統"
+        },
+        ui: {
+          missionCode: "輸入任務代碼 (MISSION CODE)",
+          connectBtn: "初始化連線",
+          round: "回合",
+          timer: "追蹤倒數",
+          bugTarget: "目標故障碼",
+          currentBugs: "已攔截蟲數",
+          wordLabel: "輸入解碼字串",
+          enterWord: "輸入單字...",
+          reqValid: "任務條件已符合",
+          validate: "[ REQUEST VALIDATED ]",
+          submit: "傳送封包",
+          roundScore: "本回合貢獻",
+          baseScore: "字母基礎分",
+          bugBonus: "故障碼完美清除",
+          hqBonus: "最高指令達成",
+          totalPoints: "總計",
+          viewReport: "查看結算報告",
+          nextRound: "下一回合",
+          gameOver: "連線中斷 / 任務結束",
+          gameDesc: "追蹤程式已鎖定你的位置。請立即清除裝置資料並撤離。地下網路將永遠銘記你的貢獻。",
+          finalScore: "最終總貢獻",
+          restart: "重新啟動系統",
+          directive: "指令",
+          pointsUnit: "分",
+          bugProgress: "故障碼進度",
+          interceptedWord: "攔截單字",
+          letterScore: "字母得分",
+          lettersUnit: "字",
+          bugExtermination: "故障碼掃除",
+          collected: "收集",
+          target: "目標",
+          hqMission: "最高指令任務",
+          roundTotal: "回合總計"
+        },
+        missions: [
+          { id: 1, title: "偶數矩陣", points: 2, desc: "單字的字母總數量必須為偶數。", example: "Bois, textes, venimeux 等。" },
+          { id: 2, title: "三核架構", points: 3, desc: "單字裡有三個子音。", example: "Part, sauter, bourreau 等。" },
+          { id: 3, title: "動態執行", points: 2, desc: "原型動詞或已變位的動詞皆可（過去式、單複數、人稱變化）。", example: "Voir, pense, devinera 等。" },
+          { id: 4, title: "三重波段", points: 3, desc: "單字發音至少包含三個音節。", example: "Ko-a-la, to-ma-te, li-ber-té 等。" },
+          { id: 5, title: "體能數據", points: 3, desc: "意指運動類型、術語或運動用品的字彙。", example: "Club, dopage, victoire 等。" },
+          { id: 6, title: "跨海連線", points: 3, desc: "來自非母語來源的字彙。", example: "Verde（西語）, dream（英語）, giocare（義語）等。" },
+          { id: 7, title: "生體特徵", points: 3, desc: "五官、四肢或內臟器官皆可。", example: "Nez, main, cœur 等。" },
+          { id: 8, title: "隱蔽空間", points: 3, desc: "拼出的單字必須能自然填入該句「我躲在一個、一間或一些 ______ 裡面。」", example: "Trou, squat, forêt, placard 等。" },
+          { id: 9, title: "子母三明治", points: 3, desc: "一個單字的組成結構必須為「兩個子音夾一個母音」（或結構內包含此特徵）。", example: "Coq, véto, farine, manipule 等。" },
+          { id: 10, title: "字中字", points: 3, desc: "單字組成中有「其中三個連續字母」可以單獨組成另一個獨立的單字。", example: "Voler（前三字 Vol 意為飛行）、capter（前三字 Cap 意為海岬）等。" },
+          { id: 11, title: "偏愛宣言", points: 2, desc: "拼出的單字必須能合乎邏輯地填入此句子中（意為：「我熱愛這個、這些 ______ 。」）。", example: "Thé（茶）, danse（舞蹈）, sushis（壽司）等。" },
+          { id: 12, title: "雙重語義", points: 3, desc: "擁有一字多意、雙重含義的單字。", example: "rose（玫瑰/rise的過去式）, watch（手錶/觀看), sake（清酒/責任）等。" },
+          { id: 13, title: "迴圈字串", points: 3, desc: "單字的首個字母與最後一個字母完全相同。", example: "Toit, rêver, attira, notation 等。" },
+          { id: 14, title: "音階密碼", points: 2, desc: "單字內發音包含音樂音符的聲音（如 Do, Ré, Mi, Fa, Sol, La, Si）。", example: "Judo（含 Do）, cadeau（含 Do）, terminer（含 Mi）等。" },
+          { id: 15, title: "頻段封鎖", points: 2, desc: "拼出的單字中，絕對禁止使用字母「T」和「V」。", example: "Bal, films, mediocre 等。" },
+          { id: 16, title: "屬性定義", points: 2, desc: "語意為形容詞的單字。", example: "Beau, belle, tenace, curieuse 等。" },
+          { id: 17, title: "除蟲高手", points: 3, desc: "使用超過三張標示三個小蟲的字母卡。", example: "（需配合卡牌上的小蟲圖案判定）" },
+          { id: 18, title: "微調收尾", points: 2, desc: "單字的最後一個字母必須是子音。", example: "Ouest, gravir, delation 等。" },
+          { id: 19, title: "代號辨識", points: 2, desc: "專有名詞中的人名/名字。", example: "Zoe, Nael, Agathe, Valentin 等。" },
+          { id: 20, title: "堆疊限制", points: 2, desc: "不可拼出含有重複字母的單字（單字內每個字母只能出現一次）。", example: "Fois, pacte, slogan, hamster 等。" },
+          { id: 21, title: "座標定位", points: 2, desc: "地方或城市的專有名詞（地名）。", example: "Tokyo, London, America, Paris 等。" }
+        ]
+      },
+      en: {
+        intro: {
+          story: "Decoder, welcome to the Underground Resistance. In this city, language is under strict surveillance. Free words are our only weapon. You must intercept and reassemble the blacklisted vocabulary before the tracer program locks onto our signal.",
+          loading: "Downloading mission protocols...",
+          tasks: {
+            task1: "Task 1: Letter Decoding - Intercept data packets. Choose one character from the top or bottom half of your hand to construct an actual word. Each character grants 1 point.",
+            task2: "Task 2: Bug Exterminator - The total 'bug count' on your word must perfectly match the specified fault code. Grants 2 points.",
+            task3: "Task 3: Prime Directive - Fulfill the conditions of the HQ-assigned 'Mission Card' for an additional 3 points. Once verified, execute [ REQUEST VALIDATED ] to commit the contribution to the network.",
+            warning: "WARNING: Tracer Timer - Music starts the trace. You must finalize the sequence before the countdown reaches zero."
+          },
+          startBtn: "INITIALIZE SYSTEM"
+        },
+        ui: {
+          missionCode: "ENTER MISSION CODE",
+          connectBtn: "ESTABLISH CONNECTION",
+          round: "ROUND",
+          timer: "TRACER",
+          bugTarget: "TARGET BUG COUNT",
+          currentBugs: "BUGS CAPTURED",
+          wordLabel: "DECODED STRING",
+          enterWord: "Input word...",
+          reqValid: "MISSION CONDITIONS MET",
+          validate: "[ REQUEST VALIDATED ]",
+          submit: "TRANSMIT PACKET",
+          roundScore: "ROUND CONTRIBUTION",
+          baseScore: "BASE DECODE",
+          bugBonus: "BUG EXTERMINATED",
+          hqBonus: "DIRECTIVE MET",
+          totalPoints: "TOTAL",
+          viewReport: "VIEW FINAL REPORT",
+          nextRound: "NEXT ROUND",
+          gameOver: "CONNECTION SEVERED",
+          gameDesc: "Tracer programs have locked onto your coordinates. Purge your device and evacuate immediately. The Underground Network will remember your contribution.",
+          finalScore: "FINAL SCORE",
+          restart: "REBOOT SYSTEM",
+          directive: "DIRECTIVE",
+          pointsUnit: " pts",
+          bugProgress: "BUG PROGRESS",
+          interceptedWord: "INTERCEPTED WORD",
+          letterScore: "LETTER SCORE",
+          lettersUnit: " letters",
+          bugExtermination: "BUG EXTERMINATION",
+          collected: "Collected",
+          target: "Target",
+          hqMission: "HQ DIRECTIVE MISSION",
+          roundTotal: "ROUND TOTAL"
+        },
+        missions: [
+          { id: 1, title: "EVEN MATRIX", points: 2, desc: "Total letter count must be an even integer.", example: "Bois, textes, venimeux, etc." },
+          { id: 2, title: "TRIPLE-CORE ARCHITECTURE", points: 3, desc: "Word must contain exactly three consonants.", example: "Part, sauter, bourreau, etc." },
+          { id: 3, title: "DYNAMIC EXECUTION", points: 2, desc: "Accepts base verbs or conjugated forms (past tense, plural, person).", example: "Voir, pense, devinera, etc." },
+          { id: 4, title: "TRIPLE BANDWIDTH", points: 3, desc: "Word must contain at least three phonetic syllables.", example: "Ko-a-la, to-ma-te, li-ber-té, etc." },
+          { id: 5, title: "PHYSICAL DATA", points: 3, desc: "Keywords related to sports, athletics, or gear.", example: "Club, dopage, victoire, etc." },
+          { id: 6, title: "CROSS-BORDER LINK", points: 3, desc: "Vocabulary derived from non-native origins.", example: "Verde (ES), dream (EN), giocare (IT), etc." },
+          { id: 7, title: "BIOMETRIC SCAN", points: 3, desc: "Refers to facial features, limbs, or internal organs.", example: "Nez, main, cœur, etc." },
+          { id: 8, title: "CLANDESTINE SPACE", points: 3, desc: "Word must logically complete: 'I am hiding in a/an ______ .'", example: "Trou, squat, forêt, placard, etc." },
+          { id: 9, title: "CONSONANT SANDWICH", points: 3, desc: "Structure must feature a vowel trapped between two consonants.", example: "Coq, véto, farine, manipule, etc." },
+          { id: 10, title: "NESTED CODE", points: 3, desc: "Any three consecutive letters within the word must form a valid standalone word.", example: "Voler (Vol=flight), capter (Cap=cape), etc." },
+          { id: 11, title: "PREFERENCE PROTOCOL", points: 3, desc: "Word must logically complete: 'I am obsessed with this/these ______ .'", example: "Thé, danse, sushis, etc." },
+          { id: 12, title: "DUAL SEMANTICS", points: 3, desc: "Words possessing multiple meanings or double entente.", example: "rose (flower/past-rise), watch (timepiece/observe), sake (alcohol/duty), etc." },
+          { id: 13, title: "LOOPBACK STRING", points: 3, desc: "First and last characters of the word must be identical.", example: "Toit, rêver, attira, notation, etc." },
+          { id: 14, title: "SCALER PASSWORD", points: 2, desc: "Pronunciation must contain musical notes (Do, Ré, Mi, Fa, Sol, La, Si).", example: "Judo (Do), cadeau (Do), terminer (Mi), etc." },
+          { id: 15, title: "BANDWIDTH BLOCK", points: 2, desc: "Forbidden: The letters 'T' and 'V' are strictly prohibited.", example: "Bal, films, mediocre, etc." },
+          { id: 16, title: "ATTRIBUTE DEFINITION", points: 2, desc: "Must be an adjective form.", example: "Beau, belle, tenace, curieuse, etc." },
+          { id: 17, title: "BUG EXTERMINATOR", points: 3, desc: "Use more than three letter cards marked with 3+ bugs.", example: "(Requires verifying bug icons on cards)" },
+          { id: 18, title: "TAIL-END TUNING", points: 2, desc: "The final letter of the word must be a consonant.", example: "Ouest, gravir, delation, etc." },
+          { id: 19, title: "ALIAS RECOGNITION", points: 2, desc: "Proper nouns representing names/entities.", example: "Zoe, Nael, Agathe, Valentin, etc." },
+          { id: 20, title: "STACK LIMIT", points: 2, desc: "No repeating letters allowed within the word (isograms only).", example: "Fois, pacte, slogan, hamster, etc." },
+          { id: 21, title: "COORDINATE LOCK", points: 2, desc: "Proper nouns referring to geographic locations or cities.", example: "Tokyo, London, America, Paris, etc." }
+        ]
+      }
+    };
+
+    // ==========================================\
+    // 2. 核心遊戲邏輯與工具 (PRNG, Engine)
+    // ==========================================\
+    function mulberry32(a) {
+      return function() {
+        var t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      }
+    }
+
+    function generateSeed(str) {
+      let h = 1779033703 ^ str.length;
+      for(let i = 0; i < str.length; i++) {
+        h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+        h = h << 13 | h >>> 19;
+      }
+      return h;
+    }
+
+    const LETTERS = "EEEEEEEEEEEEEEEAAAAAAAAAIIIIIIIIISSSSSSSSSRRRRRRRTTTTTTTLLLLLLUUUUUUOOOOOODDDDCCCCMMMPPPGGBBFFHHVVWWYYKJXZQ";
+
+    const isLocalFileProtocol = window.location.protocol === 'file:';
+    const ASSET_PREFIX = isLocalFileProtocol ? 'D:/my-game-project/dicrypting/' : '';
+
+    const getLetterImgSrc = (letter) => {
+      const vowels = ['A', 'E', 'I', 'O', 'U', 'Y'];
+      const folder = vowels.includes(letter) ? 'vowel' : 'consonant';
+      return `${ASSET_PREFIX}icon/card icon/${folder}/${letter}.png`;
+    };
+
+    const getCardBgSrc = () => {
+      return `${ASSET_PREFIX}icon/card icon/card/card frame_02.png`;
+    };
+
+    const getCardSelectedBgSrc = () => {
+      return `${ASSET_PREFIX}icon/card icon/card/card frame_selected.png`;
+    };
+
+    const formatTime = (centiseconds) => {
+      const minutes = Math.floor(centiseconds / 6000).toString().padStart(2, '0');
+      const seconds = Math.floor((centiseconds % 6000) / 100).toString().padStart(2, '0');
+      const cs = (centiseconds % 100).toString().padStart(2, '0');
+      return `${minutes}:${seconds}:${cs}`;
+    };
+
+
+    // ==========================================\
+    // 3. 共用 UI 元件 (Inline SVG Icons)
+    // ==========================================\
+    const BugIcon = ({ className }) => (
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        viewBox="0 0 52 52" 
+        fill="currentColor" 
+        className={className}
+      >
+        <g>
+          <path d="m19.6 10h12.8a1.51 1.51 0 0 0 1.43-1.75 8 8 0 0 0 -7.83-6.25 8.05 8.05 0 0 0 -7.83 6.24 1.51 1.51 0 0 0 1.43 1.76z" />
+          <path d="m47.59 30.8a2.4 2.4 0 0 0 2.41-2.56 2.47 2.47 0 0 0 -2.57-2.24h-7v-4c4.64-1.84 7.91-6.8 8-12.71a2.48 2.48 0 0 0 -2-2.48 2.39 2.39 0 0 0 -2.8 2.4 9.14 9.14 0 0 1 -3.92 7.83 4.87 4.87 0 0 0 -4.08-2.24h-19.22a4.87 4.87 0 0 0 -4.08 2.24 9 9 0 0 1 -3.92-7.66 2.53 2.53 0 0 0 -2.24-2.56 2.39 2.39 0 0 0 -2.55 2.4c0 5.91 3.35 11 8 12.79v4h-7a2.53 2.53 0 0 0 -2.62 2.23 2.44 2.44 0 0 0 2.41 2.56h7.2v4c-4.61 1.84-7.91 6.79-7.99 12.71a2.48 2.48 0 0 0 2 2.48 2.39 2.39 0 0 0 2.8-2.4 9 9 0 0 1 3.84-7.76 14.4 14.4 0 0 0 9.27 9.44 1.61 1.61 0 0 0 2.08-1.52v-19.19a2.53 2.53 0 0 1 2.23-2.56 2.44 2.44 0 0 1 2.56 2.4v19.35a1.58 1.58 0 0 0 2.08 1.52 14.4 14.4 0 0 0 9.27-9.44 9.25 9.25 0 0 1 3.84 7.6 2.53 2.53 0 0 0 2.24 2.57 2.4 2.4 0 0 0 2.56-2.4c0-5.92-3.36-11-8-12.79v-4z" />
+        </g>
+      </svg>
+    );
+
+    const AlertTriangle = ({ className }) => (
+      <svg 
+        xmlns="http://www.w3.org/2000/svg" 
+        viewBox="0 0 24 24" 
+        fill="none" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className={className}
+      >
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    );
+
+    // ==========================================\
+    // 4. 共用 UI 容器 (Scanlines & Language Toggle)
+    // ==========================================\
+    const ScreenContainer = ({ children, lang, setLang, bgImage }) => (
+      <div className="relative min-h-screen w-full bg-gray-900 font-mono text-green-500 overflow-hidden flex flex-col p-4 md:p-8">
+        {bgImage ? (
+          <img 
+            src={bgImage} 
+            alt="screen background" 
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0" 
+          />
+        ) : (
+          <div className="absolute inset-0 bg-blue-900/10 z-0" />
+        )}
+        {/* Scanline Effect Layer */}
+        <div className="absolute inset-0 pointer-events-none z-50 opacity-10 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.5)_50%)] bg-[length:100%_4px]" />
+        
+        {/* CH/EN Toggle Button */}
+        <div className="absolute top-4 right-4 z-[999] pointer-events-auto">
+          <button 
+            className="bg-blue-900/80 text-green-500 px-3 py-1.5 hover:bg-green-500 hover:text-black transition-all cursor-pointer text-xs font-bold tracking-widest uppercase shadow-[0_0_10px_rgba(34,197,94,0.2)] rounded"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLang(lang === 'zh' ? 'en' : 'zh');
+            }}
+          >
+            {lang === 'zh' ? 'ENG' : '中文'}
+          </button>
+        </div>
+
+        {/* Main Content Render Area */}
+        <div className="relative z-10 flex-1 flex flex-col pointer-events-auto w-full max-w-4xl mx-auto justify-center">
+          {children}
+        </div>
+      </div>
+    );
+
+    // ==========================================\
+    // 5. 主要應用程式元件
+    // ==========================================\
+    function App() {
+      const [lang, setLang] = useState('zh');
+      const t = LOCALE[lang];
+
+      const [gameState, setGameState] = useState('intro'); // intro, mission_select, playing, round_end, game_over
+      const [missionCode, setMissionCode] = useState('');
+      const [round, setRound] = useState(1);
+      const [totalScore, setTotalScore] = useState(0);
+
+      const [cards, setCards] = useState([]);
+      const [selections, setSelections] = useState([]); // Array of { cardId: number, side: 'top' | 'bottom' }
+      const [mission, setMission] = useState(null);
+      const [targetBugs, setTargetBugs] = useState(0);
+      const [timeLeft, setTimeLeft] = useState(10000);
+      const [isValidated, setIsValidated] = useState(false);
+      const [shutterOpen, setShutterOpen] = useState(false);
+      const [gameplayReady, setGameplayReady] = useState(false);
+      
+      const [roundReport, setRoundReport] = useState(null);
+      const [audio] = useState(() => new Audio(isLocalFileProtocol ? 'D:/my-game-project/dicrypting/0621.MP3' : '0621.MP3'));
+
+      // 處理背景音樂播放控制 (等待過場拉開後才播放)
+      useEffect(() => {
+        if (gameState === 'playing' && gameplayReady) {
+          audio.loop = false; // 確保音樂播放完就結束
+          audio.currentTime = 0;
+          audio.play().catch(e => console.log("Audio play failed:", e));
+        } else if (gameState !== 'playing') {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+      }, [gameState, gameplayReady]);
+
+      // 處理計時器更新 (等待過場拉開後才倒數)
+      useEffect(() => {
+        let timer;
+        if (gameState === 'playing' && gameplayReady && timeLeft > 0) {
+          timer = setInterval(() => {
+            if (audio.duration) {
+              const remaining = Math.max(0, Math.floor((audio.duration - audio.currentTime) * 100));
+              setTimeLeft(remaining);
+            } else {
+              setTimeLeft(prev => Math.max(0, prev - 1));
+            }
+          }, 10);
+        }
+        return () => clearInterval(timer);
+      }, [gameState, gameplayReady, timeLeft]);
+
+      // 當時間結束且在遊戲中，觸發自動結算
+      useEffect(() => {
+        if (gameState === 'playing' && gameplayReady && timeLeft <= 0) {
+          submitWord(true);
+        }
+      }, [gameState, gameplayReady, timeLeft]);
+
+      // 處理過場遮罩與閘門開啟動畫
+      useEffect(() => {
+        if (gameState === 'playing') {
+          setShutterOpen(false);
+          setGameplayReady(false);
+
+          const openTimer = setTimeout(() => {
+            setShutterOpen(true);
+          }, 50);
+
+          const readyTimer = setTimeout(() => {
+            setGameplayReady(true);
+          }, 850);
+
+          return () => {
+            clearTimeout(openTimer);
+            clearTimeout(readyTimer);
+          };
+        } else {
+          setShutterOpen(false);
+          setGameplayReady(false);
+        }
+      }, [gameState]);
+
+      // 生成回合資料
+      const generateRound = () => {
+        const seed = generateSeed(missionCode + "R" + round);
+        const prng = mulberry32(seed);
+
+        const vowels = ['A', 'E', 'I', 'O', 'U', 'Y'];
+        const isVowel = (char) => vowels.includes(char);
+        const isVC = (c1, c2) => (isVowel(c1) && !isVowel(c2)) || (!isVowel(c1) && isVowel(c2));
+
+        const newCards = [];
+        let vcCount = 0;
+
+        for (let i = 0; i < 8; i++) {
+          let topLetter = '';
+          let bottomLetter = '';
+          let topBugs = 1;
+          let bottomBugs = 1;
+
+          // 若後面剩下的卡牌全部抽 VC 也剛好湊滿 5 張，則接下來必須強迫抽到 VC
+          const mustBeVC = (vcCount + (8 - i) === 5);
+
+          while (true) {
+            topLetter = LETTERS[Math.floor(prng() * LETTERS.length)];
+            bottomLetter = LETTERS[Math.floor(prng() * LETTERS.length)];
+            topBugs = Math.floor(prng() * 3) + 1;
+            bottomBugs = Math.floor(prng() * 3) + 1;
+
+            // 規則 1: 避免出現上下都是 S 的組合
+            if (topLetter === 'S' && bottomLetter === 'S') {
+              continue;
+            }
+
+            const isThisVC = isVC(topLetter, bottomLetter);
+
+            // 規則 2: 若觸發強迫條件且此卡不是 VC 組合，則重新抽
+            if (mustBeVC && !isThisVC) {
+              continue;
+            }
+
+            if (isThisVC) {
+              vcCount++;
+            }
+            break;
+          }
+
+          newCards.push({
+            id: i,
+            top: { letter: topLetter, bugs: topBugs },
+            bottom: { letter: bottomLetter, bugs: bottomBugs }
+          });
+        }
+
+        // 抽任務
+        const missionPool = LOCALE[lang].missions;
+        const selectedMissionIndex = Math.floor(prng() * missionPool.length);
+        
+        setCards(newCards);
+        setMission(missionPool[selectedMissionIndex].id); // 存任務ID，渲染時依lang對應
+        setTargetBugs(Math.floor(prng() * 8) + 6);
+        setSelections([]);
+        setIsValidated(false);
+        setTimeLeft(10000);
+        setGameState('playing');
+      };
+
+      const currentBugs = selections.reduce((sum, sel) => {
+        const card = cards[sel.cardId];
+        return sum + (card ? card[sel.side].bugs : 0);
+      }, 0);
+
+      const currentWord = selections
+        .map(sel => cards[sel.cardId] ? cards[sel.cardId][sel.side].letter : '')
+        .join('');
+
+      const submitWord = (isTimeUp = false) => {
+        const basePoints = currentWord.length;
+        const bugPoints = currentBugs === targetBugs ? 2 : 0;
+        const missionPoints = isValidated ? 3 : 0;
+        const roundTotal = basePoints + bugPoints + missionPoints;
+
+        setRoundReport({
+          word: currentWord,
+          base: basePoints,
+          bugCount: currentBugs,
+          bugBonus: bugPoints,
+          missionBonus: missionPoints,
+          total: roundTotal,
+          isTimeUp: isTimeUp
+        });
+        setTotalScore(prev => prev + roundTotal);
+        setGameState('round_end');
+      };
+
+      const handleNextRound = () => {
+        if (round >= 10) {
+          setGameState('game_over');
+        } else {
+          setRound(prev => prev + 1);
+          setGameState('mission_select');
+        }
+      };
+
+      // ==========================================\
+      // 渲染區塊
+      // ==========================================\
+
+      if (gameState === 'intro') {
+        return (
+          <ScreenContainer lang={lang} setLang={setLang} bgImage={ASSET_PREFIX + "background/guide page.png"}>
+            <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-terminal-boot p-4 text-center">
+              <div className="space-y-4 max-w-2xl">
+                <h1 className="text-3xl md:text-5xl font-bold tracking-widest text-green-500 drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]">
+                  DICRYPTING 
+                </h1>
+                <p className="text-green-300 leading-relaxed text-sm md:text-base border-l-4 border-green-500 pl-4 text-left">
+                  {t.intro.story}
+                </p>
+              </div>
+
+              <div className="bg-green-900/20 border border-green-500/50 p-6 rounded-sm w-full max-w-2xl text-left space-y-4 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
+                <div className="flex items-center gap-2 text-green-400 animate-pulse mb-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  <span className="font-bold text-red-500">{t.intro.tasks.warning}</span>
+                </div>
+                 
+                <div className="space-y-4 text-sm md:text-base text-green-200">
+                  <div className="flex items-start gap-3">
+                    <svg 
+                      viewBox="0 0 24 24" 
+                      fill="currentColor" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-5 h-5 shrink-0 mt-1 text-green-500 drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]"
+                    >
+                      <path d="M5.618 14h2.764l-1.382-2.764zM21 14l2.4-3.2c.686-.915.795-2.119.284-3.142-.512-1.023-1.54-1.658-2.684-1.658h-6c-1.654 0-3 1.346-3 3 0 .77.295 1.469.774 2h-.274c-.368 0-.708.107-1.005.281l-1.811-3.623c-.498-.995-1.527-1.614-2.684-1.614s-2.186.619-2.684 1.614l-4 8c-.358.717-.416 1.53-.163 2.291s.788 1.376 1.504 1.735c.414.207.879.316 1.342.316 1.143 0 2.171-.635 2.684-1.657l.171-.343h2.291l.171.342c.512 1.023 1.54 1.658 2.684 1.658.464 0 .928-.109 1.342-.316.243-.122.455-.282.652-.458.54.488 1.246.774 2.006.774h6c1.654 0 3-1.346 3-3s-1.346-3-3-3zm-9.553 3.895c-.143.071-.296.105-.446.105-.368 0-.721-.203-.896-.553l-.723-1.447h-4.764l-.724 1.447c-.175.35-.528.553-.895.553-.15 0-.303-.034-.446-.106-.494-.247-.694-.848-.447-1.342l4-8c.169-.338.532-.508.894-.508s.725.169.895.508l4 8c.247.495.046 1.095-.448 1.343zm1.053-3.895c-.552 0-1-.448-1-1s.448-1 1-1h1c.552 0 1 .448 1 1s-.448 1-1 1h-1zm8.5 4h-6c-.379 0-.725-.214-.895-.553s-.132-.744.095-1.047l4.8-6.4h-4c-.552 0-1-.448-1-1s.448-1 1-1h6c.379 0 .725.214.895.553s.132.744-.095 1.047l-4.8 6.4h4c.552 0 1 .448 1 1s-.448 1-1 1z"/>
+                    </svg>
+                    <p>{t.intro.tasks.task1}</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <img src={ASSET_PREFIX + "icon/card icon/bug/svgviewer-png-output.png"} alt="bug" className="w-5 h-5 shrink-0 mt-1 object-contain" />
+                    <p className="flex-1">{t.intro.tasks.task2}</p>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <svg 
+                      viewBox="0 0 48 48" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="w-5 h-5 shrink-0 mt-1 text-green-500 drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21.4172 18.5828C19.3962 19.5481 18 21.6109 18 23.9999C18 27.3136 20.6863 29.9999 24 29.9999C26.389 29.9999 28.4519 28.6037 29.4172 26.5828" />
+                      <path d="M28.2793 11.7207C26.9392 11.2538 25.4992 11 24 11C16.8203 11 11 16.8203 11 24C11 31.1797 16.8203 37 24 37C31.1797 37 37 31.1797 37 24C37 22.5008 36.7462 21.0608 36.2793 19.7207" />
+                      <path d="M33.5675 6.43255C30.7255 4.88151 27.4657 4 24 4C12.9543 4 4 12.9543 4 24C4 35.0457 12.9543 44 24 44C35.0457 44 44 35.0457 44 24C44 20.5343 43.1185 17.2745 41.5675 14.4325" />
+                      <path d="M44 4L24 24" />
+                    </svg>
+                    <p>{t.intro.tasks.task3}</p>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                className="px-8 py-3 bg-green-600 text-black font-bold tracking-widest hover:bg-green-400 transition-colors uppercase animate-pulse shadow-[0_0_15px_rgba(22,163,74,0.4)]"
+                onClick={() => setGameState('mission_select')}
+              >
+                {t.intro.startBtn}
+              </button>
+            </div>
+          </ScreenContainer>
+        );
+      }
+
+      if (gameState === 'mission_select') {
+        return (
+          <ScreenContainer lang={lang} setLang={setLang} bgImage={ASSET_PREFIX + "background/mission page.png"}>
+            <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-terminal-boot">
+              <div className="text-center space-y-4">
+                <h2 className="text-2xl font-bold tracking-widest text-green-400">{t.ui.missionCode}</h2>
+                <p className="text-sm text-green-600 uppercase">[{t.ui.round} {round} / 10]</p>
+              </div>
+              
+              <div className="flex flex-col items-center space-y-3 w-full">
+                <input 
+                  type="text"
+                  className="bg-black border-b-2 border-green-500 text-center text-3xl text-green-400 p-2 focus:outline-none focus:border-green-300 uppercase tracking-widest w-48 sm:w-64"
+                  value={missionCode}
+                  onChange={(e) => setMissionCode(e.target.value.toUpperCase())}
+                  placeholder="[ _ _ _ _ ]"
+                  maxLength={10}
+                />
+                <div className="text-[10px] sm:text-xs text-green-600 font-bold tracking-wider">
+                  {lang === 'zh' ? '輸入4碼數字' : 'Input 4 digits'}
+                </div>
+              </div>
+
+              <button 
+                disabled={!missionCode.trim()}
+                className="px-8 py-3 border-2 border-green-500 hover:bg-green-500 hover:text-black transition-colors disabled:opacity-30 disabled:hover:bg-black disabled:hover:text-green-500 uppercase tracking-widest mt-8 sm:mt-12"
+                onClick={generateRound}
+              >
+                {t.ui.connectBtn}
+              </button>
+            </div>
+          </ScreenContainer>
+        );
+      }
+
+      if (gameState === 'playing') {
+        const currentMission = t.missions.find(m => m.id === mission) || t.missions[0];
+        const timer = timeLeft;
+        const currentSelectedBugs = currentBugs;
+
+        // 移除特定的已選擇字母
+        const handleRemoveSelected = (cardId) => {
+          setSelections(prev => prev.filter(s => s.cardId !== cardId));
+        };
+
+        // 清除所有選擇
+        const handleClearAnswer = () => setSelections([]);
+
+        // 點擊手牌
+        const handleCardClick = (idx, side) => {
+          const card = cards[idx];
+          // 檢查是否已選擇該張卡
+          if (selections.some(s => s.cardId === card.id)) return;
+          setSelections(prev => [...prev, { cardId: card.id, side: side }]);
+        };
+
+        return (
+          <ScreenContainer lang={lang} setLang={setLang} bgImage={ASSET_PREFIX + "background/playing page.png"}>
+            {/* Split Screen Reveal Shutter Overlay */}
+            <div className="absolute inset-0 pointer-events-none z-[1000] flex overflow-hidden">
+              {/* Left Shutter */}
+              <div 
+                className="h-full relative transition-transform duration-[800ms] ease-out flex-1 overflow-hidden"
+                style={{ 
+                  transform: shutterOpen ? 'translateX(-100%)' : 'translateX(0)',
+                  transitionProperty: 'transform'
+                }} 
+              >
+                <img 
+                  src={ASSET_PREFIX + "background/mission page.png"} 
+                  alt="left gate" 
+                  className="absolute top-0 left-0 h-full max-w-none object-cover"
+                  style={{ width: '200%', left: '0' }}
+                />
+              </div>
+              {/* Right Shutter */}
+              <div 
+                className="h-full relative transition-transform duration-[800ms] ease-out flex-1 overflow-hidden"
+                style={{ 
+                  transform: shutterOpen ? 'translateX(100%)' : 'translateX(0)',
+                  transitionProperty: 'transform'
+                }} 
+              >
+                <img 
+                  src={ASSET_PREFIX + "background/mission page.png"} 
+                  alt="right gate" 
+                  className="absolute top-0 right-0 h-full max-w-none object-cover"
+                  style={{ width: '200%', right: '0' }}
+                />
+              </div>
+            </div>
+
+            {/* Gameplay Content wrapper */}
+            <div className={`flex-1 flex flex-col w-full transition-opacity duration-500 ${gameplayReady ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              {/* Header / Mission Panel */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-800/80 p-4 rounded border border-green-700 mb-6 shadow-lg gap-4 mt-12 md:mt-4">
+              <div className="flex-1">
+                <h3 className="text-amber-400 font-bold text-lg mb-1">
+                  [{t.ui.directive}] {currentMission.title} {currentMission.points ? `(${currentMission.points}${t.ui.pointsUnit})` : ''}
+                </h3>
+                <p className="text-xs text-green-300">{currentMission.desc}</p>
+                {currentMission.example && (
+                  <p className="text-[10px] text-green-600 italic mt-1">EX: {currentMission.example}</p>
+                )}
+              </div>
+              
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0 w-full md:w-auto">
+                <div className="bg-black px-4 py-2 rounded border border-green-600 text-center min-w-[130px]">
+                  <span className="text-xs text-green-500 block">{t.ui.bugProgress}</span>
+                  <span className="text-xl md:text-2xl font-bold flex items-center justify-center gap-1">
+                     <span className={currentSelectedBugs === targetBugs ? 'text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.8)]' : 'text-green-400'}>{currentSelectedBugs}</span> 
+                     <span className="text-green-600 text-lg flex items-center">
+                      / {targetBugs} <img src={ASSET_PREFIX + "icon/card icon/bug/svgviewer-png-output.png"} alt="bug" className="w-5 h-5 ml-1 inline-block object-contain" />
+                     </span>
+                  </span>
+                </div>
+                
+                <label className="flex items-center justify-center gap-2 cursor-pointer bg-green-900/50 p-2 rounded hover:bg-green-800 transition-colors border border-green-700">
+                  <input 
+                    type="checkbox" 
+                    checked={isValidated}
+                    onChange={(e) => setIsValidated(e.target.checked)}
+                    className="w-5 h-5 accent-amber-500 cursor-pointer"
+                  />
+                  <span className={`text-sm font-bold ${isValidated ? 'text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.8)]' : 'text-green-500'}`}>
+                    REQUEST VALIDATED
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Decoded Word / Timer Area */}
+            <div className="flex flex-col flex-1 justify-center relative my-4">
+              <div className="absolute top-0 right-0 flex items-center gap-3">
+                <img 
+                  src={timer > 1500 ? (ASSET_PREFIX + "icon/timer/timer_green.png") : (ASSET_PREFIX + "icon/timer/timer_red.png")} 
+                  alt="timer icon" 
+                  className={`w-8 h-8 sm:w-10 sm:h-10 object-contain ${timer <= 1500 ? 'animate-pulse' : ''}`} 
+                />
+                <div className={`font-bold text-2xl sm:text-4xl md:text-5xl tracking-widest ${timer <= 1500 ? 'text-red-500 animate-pulse drop-shadow-[0_0_12px_rgba(239,68,68,0.8)]' : 'text-green-500'}`}>
+                  {formatTime(timer)}
+                </div>
+              </div>
+
+              <div className="text-center mb-2 text-green-600 text-sm">DECRYPTED DATA STREAM</div>
+              <div className="flex justify-center gap-1 md:gap-2 mb-4 overflow-x-auto py-2">
+                {/* 8 slots */}
+                {Array.from({ length: 8 }).map((_, i) => {
+                  const sel = selections[i];
+                  const card = sel ? cards[sel.cardId] : null;
+                  const item = card ? card[sel.side] : null;
+                  return (
+                    <div 
+                      key={i} 
+                      onClick={() => sel && handleRemoveSelected(sel.cardId)}
+                      className={`w-10 h-10 sm:w-14 sm:h-14 md:w-20 md:h-20 flex flex-col justify-center items-center relative transition-colors shrink-0 overflow-hidden ${item ? 'cursor-pointer hover:bg-red-900/40' : 'border border-green-800 bg-black/40'}`}
+                    >
+                      {item && (
+                        <>
+                          <img src={getCardSelectedBgSrc()} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                          <img src={getLetterImgSrc(item.letter)} className="w-1/2 h-1/2 object-contain z-10" />
+                          <div className="absolute bottom-[2px] md:bottom-1 flex gap-[1px] md:gap-[2px] z-10 bg-black/20 px-1 rounded-sm">
+                            {Array.from({length: item.bugs}).map((_, bi) => (
+                              <img 
+                                key={bi} 
+                                src={ASSET_PREFIX + "icon/card icon/bug/svgviewer-png-output.png"} 
+                                alt="bug" 
+                                className="w-[8px] h-[8px] sm:w-[10px] sm:h-[10px] md:w-3 md:h-3 object-contain" 
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="flex justify-end pr-2">
+                <button 
+                  onClick={handleClearAnswer}
+                  className="text-xs px-3 py-1 bg-red-900/50 hover:bg-red-800 text-red-300 border border-red-800 rounded transition-colors"
+                >
+                  [ CLEAR DATA ]
+                </button>
+              </div>
+            </div>
+
+            {/* Hands Area */}
+            <div className="bg-gray-800/50 p-4 rounded-t-xl border-t-2 border-l-2 border-r-2 border-green-800 mt-auto shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
+              <div className="text-center text-[10px] sm:text-xs text-green-500 mb-3 tracking-widest">- ENCRYPTED PACKETS -</div>
+              <div className="flex justify-center gap-1 sm:gap-2 md:gap-3 overflow-x-auto pb-3 px-1">
+                {cards.map((card, idx) => {
+                  const isUsed = selections.some(s => s.cardId === card.id);
+                  return (
+                    <div key={card.id} className={`w-[11vw] max-w-[3.5rem] h-[22vw] max-h-[7rem] sm:w-14 sm:h-28 md:w-20 md:h-36 md:max-w-none md:max-h-none flex flex-col overflow-hidden transition-all shrink-0 relative ${isUsed ? 'opacity-40 grayscale' : 'hover:scale-105 shadow-[0_0_8px_rgba(34,197,94,0.3)]'}`}>
+                      {/* Card Frame Background (Whole Card) */}
+                      <img src={getCardBgSrc()} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                      
+                      {/* Top Half */}
+                      <div 
+                        onClick={() => !isUsed && handleCardClick(idx, 'top')}
+                        className={`h-1/2 flex flex-col justify-center items-center relative overflow-hidden ${!isUsed ? 'hover:bg-green-900/40 cursor-pointer active:opacity-60' : 'cursor-not-allowed'} z-10`}
+                      >
+                        <img src={getLetterImgSrc(card.top.letter)} className="w-1/2 h-1/2 object-contain" />
+                        <div className="absolute bottom-[2px] md:bottom-1 flex gap-[1px] md:gap-[2px] bg-black/20 px-1 rounded-sm">
+                          {Array.from({length: card.top.bugs}).map((_, i) => (
+                            <img 
+                              key={i} 
+                              src="D:/my-game-project/dicrypting/icon/card icon/bug/svgviewer-png-output.png" 
+                              alt="bug" 
+                              className="w-[8px] h-[8px] sm:w-[10px] sm:h-[10px] md:w-3 md:h-3 object-contain" 
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Bottom Half */}
+                      <div 
+                        onClick={() => !isUsed && handleCardClick(idx, 'bottom')}
+                        className={`h-1/2 flex flex-col justify-center items-center relative overflow-hidden ${!isUsed ? 'hover:bg-green-900/40 cursor-pointer active:opacity-60' : 'cursor-not-allowed'} z-10`}
+                      >
+                        <img src={getLetterImgSrc(card.bottom.letter)} className="w-1/2 h-1/2 object-contain" />
+                        <div className="absolute bottom-[2px] md:bottom-1 flex gap-[1px] md:gap-[2px] bg-black/20 px-1 rounded-sm">
+                          {Array.from({length: card.bottom.bugs}).map((_, i) => (
+                            <img 
+                              key={i} 
+                              src="D:/my-game-project/dicrypting/icon/card icon/bug/svgviewer-png-output.png" 
+                              alt="bug" 
+                              className="w-[8px] h-[8px] sm:w-[10px] sm:h-[10px] md:w-3 md:h-3 object-contain" 
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4 flex justify-center">
+                <button 
+                  onClick={() => submitWord(false)}
+                  disabled={currentWord.length === 0}
+                  className="w-full md:w-auto px-12 py-3 bg-red-800 hover:bg-red-600 text-white font-bold text-lg rounded shadow-[0_0_10px_rgba(220,38,38,0.5)] border border-red-400 disabled:opacity-50 disabled:cursor-not-allowed uppercase"
+                >
+                  [ END ROUND ]
+                </button>
+              </div>
+            </div>
+          </div>
+        </ScreenContainer>
+        );
+      }
+
+      if (gameState === 'round_end') {
+        const currentMission = t.missions.find(m => m.id === mission) || t.missions[0];
+        
+        return (
+          <ScreenContainer lang={lang} setLang={setLang} bgImage={ASSET_PREFIX + "background/mission page.png"}>
+            <div className="flex-1 flex flex-col justify-center items-center text-center space-y-6 mt-10 p-6 animate-terminal-boot">
+              <h2 className="text-3xl md:text-4xl font-bold text-amber-500 drop-shadow-[0_0_10px_rgba(245,158,11,0.5)]">
+                {roundReport.isTimeUp ? 'SYSTEM INTERCEPTED - TIME UP' : 'DECRYPTION COMPLETE'}
+              </h2>
+
+              <div className="bg-black/60 border border-green-600 p-6 rounded-lg w-full max-w-md space-y-4">
+                <div className="mb-6">
+                  <span className="text-green-600 text-sm">{t.ui.interceptedWord}</span>
+                  <div className="text-4xl font-bold text-green-300 uppercase tracking-widest mt-1 min-h-[40px]">
+                    {roundReport.word || '[EMPTY]'}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-green-400 border-b border-green-900 pb-2">
+                  <span>{t.ui.letterScore} ({roundReport.base}{t.ui.lettersUnit})</span>
+                  <span className="font-bold">+{roundReport.base}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-green-400 border-b border-green-900 pb-2">
+                  <div className="flex flex-col items-start">
+                    <span>{t.ui.bugExtermination}</span>
+                    <span className="text-xs text-gray-400">{t.ui.collected}: {roundReport.bugCount} / {t.ui.target}: {targetBugs}</span>
+                  </div>
+                  <span className={`font-bold ${roundReport.bugBonus > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
+                    +{roundReport.bugBonus}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-green-400 border-b border-green-900 pb-2">
+                   <div className="flex flex-col items-start text-left">
+                    <span>{t.ui.hqMission}</span>
+                    <span className="text-xs text-gray-400 truncate max-w-[200px]">{currentMission.title}</span>
+                  </div>
+                  <span className={`font-bold ${roundReport.missionBonus > 0 ? 'text-amber-400' : 'text-gray-500'}`}>
+                    +{roundReport.missionBonus}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-xl text-green-300 pt-2 font-bold">
+                  <span>{t.ui.roundTotal}</span>
+                  <span className="text-3xl text-green-500">+{roundReport.total}</span>
+                </div>
+              </div>
+
+              <div className="pt-6">
+                <button 
+                  onClick={handleNextRound}
+                  className="px-8 py-3 bg-green-700 hover:bg-green-500 text-black font-bold text-xl rounded shadow-[0_0_10px_rgba(34,197,94,0.6)] uppercase"
+                >
+                  {round >= 10 ? 'VIEW FINAL REPORT' : 'NEXT ROUND_'}
+                </button>
+              </div>
+            </div>
+          </ScreenContainer>
+        );
+      }
+
+      if (gameState === 'game_over') {
+        return (
+          <ScreenContainer lang={lang} setLang={setLang}>
+            <div className="flex-1 flex flex-col justify-center items-center text-center space-y-8 animate-terminal-boot p-4">
+              <h1 className="text-4xl md:text-5xl font-bold tracking-widest text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]">
+                {t.ui.gameOver}
+              </h1>
+              <p className="text-red-300/80 max-w-lg leading-relaxed">
+                {t.ui.gameDesc}
+              </p>
+              
+              <div className="bg-black/80 border-2 border-amber-500 p-8 rounded-sm shadow-[0_0_20px_rgba(245,158,11,0.3)] w-full max-w-sm">
+                <h3 className="text-amber-600 mb-2 font-bold tracking-widest">{t.ui.finalScore}</h3>
+                <div className="text-8xl font-bold text-amber-400 drop-shadow-[0_0_10px_rgba(245,158,11,0.8)]">
+                  {totalScore}
+                </div>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setRound(1);
+                  setTotalScore(0);
+                  setMissionCode('');
+                  setGameState('mission_select');
+                }}
+                className="px-8 py-3 border-2 border-red-500 text-red-500 hover:bg-red-500 hover:text-black transition-colors uppercase tracking-widest mt-8"
+              >
+                {t.ui.restart}
+              </button>
+            </div>
+          </ScreenContainer>
+        );
+      }
+
+      return null;
+    }
+
+    // Mount App component
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
