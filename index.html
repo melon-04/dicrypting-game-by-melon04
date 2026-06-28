@@ -236,15 +236,15 @@
     const getLetterImgSrc = (letter) => {
       const vowels = ['A', 'E', 'I', 'O', 'U', 'Y'];
       const folder = vowels.includes(letter) ? 'vowel' : 'consonant';
-      return `${ASSET_PREFIX}icon/card icon/${folder}/${letter}.png`;
+      return `${ASSET_PREFIX}icon//${folder}/${letter}.png`;
     };
 
     const getCardBgSrc = () => {
-      return `${ASSET_PREFIX}icon/card icon/card/card frame_02.png`;
+      return `${ASSET_PREFIX}icon//card/card frame_02.png`;
     };
 
     const getCardSelectedBgSrc = () => {
-      return `${ASSET_PREFIX}icon/card icon/card/card frame_selected.png`;
+      return `${ASSET_PREFIX}icon//card/card frame_selected.png`;
     };
 
     const formatTime = (centiseconds) => {
@@ -790,7 +790,7 @@
                           {Array.from({length: card.top.bugs}).map((_, i) => (
                             <img 
                               key={i} 
-                              src="D:/my-game-project/dicrypting/icon/card icon/bug/svgviewer-png-output.png" 
+                              src="DASSET_PREFIX + "/icon/card icon/bug/svgviewer-png-output.png" 
                               alt="bug" 
                               className="w-[8px] h-[8px] sm:w-[10px] sm:h-[10px] md:w-3 md:h-3 object-contain" 
                             />
@@ -808,7 +808,7 @@
                           {Array.from({length: card.bottom.bugs}).map((_, i) => (
                             <img 
                               key={i} 
-                              src="D:/my-game-project/dicrypting/icon/card icon/bug/svgviewer-png-output.png" 
+                              src="ASSET_PREFIX + "icon/card icon/bug/svgviewer-png-output.png" 
                               alt="bug" 
                               className="w-[8px] h-[8px] sm:w-[10px] sm:h-[10px] md:w-3 md:h-3 object-contain" 
                             />
